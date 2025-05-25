@@ -25,7 +25,7 @@ def heur_alternate(state):
     #possible options: distance from robot to box considered, number of obstacles in direct path
 
 
-    return 0 
+    return heur_manhattan_distance(state)
 
 # CONSTANTS
 
@@ -88,45 +88,53 @@ def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n)
     '''OUTPUT: A goal state (if a goal is found), else False as well as a SearchStats object'''
     '''implementation of iterative astar algorithm'''
 
-    goal_state, stats, time_up = None, None, False
-
-    #track when we began searching and when we are to stop
-    global_search_start_time = os.times[0]
-    search_end_time = global_search_start_time + timebound    
+    goal_state, better_goal_state = None, None
 
     SE, setup_time = init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level="full")
     
-    goal_state, stats = SE.search(timebound=timebound - setup_time)
+    timebound -= setup_time
+    goal_state, stats = SE.search(timebound)
+
+    #track when we began searching and when we are to stop
+    global_search_start_time = os.times()[0]
+    search_end_time = global_search_start_time + timebound  
 
     #are we out of time?
-    time_up = os.times[0] > search_end_time
+    time_up = os.times()[0] >= search_end_time
     #timebound needs to be adjusted, remove time taken so far
-    timebound -= os.times[0] - global_search_start_time
+    timebound -= (os.times()[0] - global_search_start_time)
 
     #We introduce a costbound for any follow up searches we have given we have time to do them
     #Dont explore paths that have a cost greater than what we have found so far
-    best_path_cost = goal_state.gval
+    costbound = [math.inf, math.inf, math.inf]
+
+    if goal_state:
+        costbound[2] = goal_state.gval
+    else:
+        print("Goal state not found in initial search for iterative astar")
+        return goal_state, stats
 
     while not time_up:
         #subtract from timebound how long current search has taken so following searches
         #get an accurate lesser timebound
-        current_search_start_time = os.times[0]
+        current_search_start_time = os.times()[0]
 
         #iteratively decrease weight of heuristic, the smaller w means we focus more on
         #immediate cost, if we have time to find a solution, we are guaranteed optimality
         #as we decrease weight value though time to solve takes longer.
         adjust_SE(SE, initial_state, heur_fn, weight * _WEIGHT_FACTOR)
 
-        better_goal_state, better_stats = SE.search(timebound, costbound=best_path_cost)
+        better_goal_state, better_stats = SE.search(timebound, costbound=costbound)
 
-        time_up = os.times[0] > search_end_time
-        timebound -= os.times[0] - current_search_start_time
-        best_path_cost = better_goal_state.gval if better_goal_state.gval <= best_path_cost else best_path_cost
+        time_up = os.times()[0] >= search_end_time
+        timebound -= (os.times()[0] - current_search_start_time)
+        if better_goal_state:
+            costbound[2] = better_goal_state.gval if better_goal_state.gval <= costbound[2] else costbound[2]
 
 
     #if we managed to find something better, return that
     if better_goal_state:
-        return better_goal_state, stats
+        return better_goal_state, better_stats
     else:
         return goal_state, stats
 
@@ -136,7 +144,44 @@ def iterative_gbfs(initial_state, heur_fn, timebound=5):  # only use h(n)
     '''INPUT: a sokoban state that represents the start state and a timebound (number of seconds)'''
     '''OUTPUT: A goal state (if a goal is found), else False'''
     '''implementation of iterative gbfs algorithm'''
-    return None, None #CHANGE THIS
+
+    #Follows general structure of iterative a star, refer to iterative_astar() for comments
+
+    goal_state, better_goal_state = None, None
+
+    SE, setup_time = init_iterative_gbfs_SE(initial_state, heur_fn, timebound, "full")
+    timebound -= setup_time
+
+    global_search_start_time = os.times()[0]
+    global_search_end_time = global_search_start_time + timebound
+    goal_state, stats = SE.search(timebound)
+
+    time_up = os.times()[0] >= global_search_end_time
+    timebound -= (os.times()[0] - global_search_start_time)
+
+    costbound = [math.inf, math.inf, math.inf]
+    
+    if goal_state:
+        costbound[0] = goal_state.gval
+    else:
+        print("Goal state not found in initial search for iterative astar")
+        return goal_state, stats
+
+    while not time_up:
+        current_search_start_time = os.times()[0]
+        better_goal_state, better_stats = SE.search(timebound, costbound=costbound)
+
+        time_up = os.times()[0] >= global_search_end_time
+        timebound -= (os.times()[0] - current_search_start_time)
+
+        if better_goal_state:
+            costbound[0] = better_goal_state.gval if better_goal_state.gval <= costbound[0] else costbound[0]
+    
+
+    if better_goal_state:
+        return better_goal_state, better_stats
+    else:
+        return goal_state, stats
 
 #HELPERS
 def find_closest(box, storage):
@@ -163,6 +208,26 @@ def find_closest(box, storage):
     
     return min, closest_point
 
+def init_iterative_gbfs_SE(initial_state, heur_fn, timebound, cc_level="full"):
+    """
+    Initialize a search engine object for iterative gbfs
+
+    @param state initial_state: initial state 
+    @param function heur_fn: heuristic
+    @param float timebound: timebound for search
+    @rtype: SearchEngine -> search engine ready to run SE.search()
+    @rtype: time_taken -> time taken to set up search engine
+    """
+
+    start_time = os.times()[0]
+
+    SE = SearchEngine(strategy="best_first", cc_level="full")
+    SE.trace_on(level=0)
+    SE.init_search(initial_state, goal_fn=sokoban_goal_state,
+                   heur_fn=heur_fn)
+    
+    return SE, os.times()[0] - start_time
+
 def init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level):
     """
     Initialize a search engine object for weighted astar search
@@ -175,18 +240,18 @@ def init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level):
     @rtype: time_taken -> time taken to set up search engine
     """
 
-    start_time = os.times[0]
+    start_time = os.times()[0]
 
     #initialize search engine
     SE = SearchEngine(strategy="custom", cc_level=cc_level)
-    SE.trace_on(level=2)
+    SE.trace_on(level=0)
 
     wrapped_fval_function = (lambda sN: fval_function(sN, weight))
 
     SE.init_search(initial_state, goal_fn=sokoban_goal_state, 
                    heur_fn=heur_fn, fval_function=wrapped_fval_function)
     
-    return SE, os.times[0] - start_time
+    return SE, os.times()[0] - start_time
 
 def adjust_SE(SE, initial_state, heur_fn, new_weight):
     """
