@@ -84,13 +84,14 @@ def heur_alternate(state):
     """
 
     for box in state.boxes:
-        if (deadlock(box, state.obstacles, state.height, state.width)):
-            return math.inf
+        if box not in state.storage:
+            if (deadlock(box, state.obstacles, state.height, state.width)):
+                return math.inf
 
-   #  made improvement on heur_manhattan_distance
-    return _wRB * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * heur_manhattan_distance(state)
+    #made improvement on heur_manhattan_distance
+    #return heur_manhattan_distance(state)
 
-    #return _wRB * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * pairwise_manhattan(state.boxes, state.storage)
+    return _wRB * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * pairwise_manhattan(state.boxes, state.storage)
 
 
 # CONSTANTS
@@ -100,6 +101,10 @@ _WEIGHT_FACTOR = 0.5
 _wRB = 1
 _wBS = 0.5
 
+_LEFT_WALL = 1
+_TOP_WALL = 2
+_RIGHT_WALL = 3
+_BOTTOM_WALL = 4
 
 def heur_zero(state):
     '''Zero Heuristic can be used to make A* search perform uniform cost search'''
@@ -312,13 +317,28 @@ def deadlock(box, obstacles, height, width):
     @param obstacles: set of obstacles on board
     @rtype: bool -> True if box in deadlock, False if not
     """
-
+    
     #corner of board checking
-    if ((box[0] - 1 <= 0 and box[1] - 1 <= 0)
-        or (box[0] - 1 <= 0 and box[1] + 1 >= height)
-        or (box[0] + 1 >= width and box[1] - 1 <= 0)
+    if ((box[0] - 1 < 0 and box[1] - 1 < 0)
+        or (box[0] - 1 < 0 and box[1] + 1 >= height)
+        or (box[0] + 1 >= width and box[1] - 1 < 0)
         or (box[0] + 1 >= width and box[1] + 1 >= height)):
         return True
+
+    #obstacle plus side of board checking    
+    wall = attached_to_wall(box, height, width)
+    if wall == _LEFT_WALL:
+        if ((box[0], box[1] - 1) in obstacles or (box[0], box[1] + 1) in obstacles):
+            return True
+    elif wall == _TOP_WALL:
+        if ((box[0] - 1, box[1]) in obstacles or (box[0] + 1, box[1]) in obstacles):
+            return True
+    elif wall == _RIGHT_WALL:
+        if ((box[0], box[1] - 1) in obstacles or (box[0], box[1] + 1) in obstacles):
+            return True
+    elif wall == _BOTTOM_WALL:
+        if ((box[0] - 1, box[1]) in obstacles or (box[0] + 1, box[1]) in obstacles):
+            return True
 
     possible_deadlocks = [[(box[0] + 1, box[1]), (box[0], box[1] + 1)], #right and down blocked
                           [(box[0] + 1, box[1]), (box[0], box[1] - 1)], #right and up blocked
@@ -331,6 +351,24 @@ def deadlock(box, obstacles, height, width):
                 return True
 
     return False
+
+def attached_to_wall(box, height, width):
+    """
+    Check if box is attached to wall
+
+    @param box: box to check for
+    @rtype: int -> True if box attached to wall, False if not
+    """
+    if (box[0] - 1 < 0):
+        return _LEFT_WALL
+    elif (box[0] + 1 >= width):
+        return _RIGHT_WALL
+    elif (box[1] - 1 < 0):
+        return _TOP_WALL
+    elif (box[1] + 1 >= height):
+        return _BOTTOM_WALL
+    else:
+        return 0
 
 def pairwise_manhattan(boxes, storage):
     """
@@ -438,16 +476,19 @@ def adjust_SE(SE, initial_state, heur_fn, new_weight):
     
 
 if __name__=='__main__':
-    ss = SokobanState("START", 0, None, 10, 10,  # dimensions
-                 ((2, 2),),  # robots
-                 frozenset(((3, 3), (0, 0), (1, 0))),  # boxes
-                 frozenset(((0, 1), (0, 2), (0, 4))),  # storage
-                 frozenset(((2, 3), (3, 2)))  # obstacles
+    ss = SokobanState("START", 0, None, 5, 5,  # dimensions
+                 ((4, 0), (4, 4)),  # robots
+                 frozenset(((3, 1), (3, 2), (3, 3))),  # boxes
+                 frozenset(((0, 0), (0, 2), (0, 4))),  # storage
+                 frozenset(((2, 0), (2, 1), (2, 3), (2, 4)))  # obstacles
                  )
     
+    print(ss.state_string())
+    print("\n\n\n\n\n\n\n\nSTART\n\n\n\n\n\n\n")
+    goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
 
-
-    goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 10)
+    if not goal_state:
+        print("No solution found")
 
 
 
