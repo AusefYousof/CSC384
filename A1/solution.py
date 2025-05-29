@@ -98,7 +98,7 @@ def heur_alternate(state):
 _WEIGHT_FACTOR = 0.5 #experimentally optimal
 #Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
 _wRB = 0 #observing the solver priorize RB distance with really adverse affects, limit to 0 for now ( :( )
-_wBS = 1 
+_wBS = 1
 
 _LEFT_WALL = 1
 _TOP_WALL = 2
@@ -323,6 +323,10 @@ def deadlock(box, boxes, obstacles, height, width):
         or (box[0] + 1 >= width and box[1] + 1 >= height)):
         return True
 
+    #2x2 deadlock
+    if (check_2x2_deadlock(box, boxes)):
+        return True
+
     #obstacle plus side of board checking    
     wall = attached_to_wall(box, height, width)
     if wall == _LEFT_WALL:
@@ -411,6 +415,23 @@ def manhattan_helper(p1, p2):
     #small helper to get manhattan of two points used in pairwise_manhattan
     return abs(p2[0] - p1[0]) + abs(p2[1] - p1[1])
 
+def check_2x2_deadlock(box, boxes):
+
+    if ((box[0] + 1, box[1]) in boxes and (box[0], box[1] + 1) in boxes #cur box top right corner going down right
+        and (box[0] + 1, box[1] + 1) in boxes):
+        return True
+    elif ((box[0] - 1, box[1]) in boxes and (box[0], box[1] + 1) in boxes  #cur box top left corner going down left
+        and (box[0] - 1, box[1] + 1) in boxes):
+        return True
+    elif ((box[0] + 1, box[1]) in boxes and (box[0], box[1] - 1) in boxes  #cur box bottom left corner going up right
+        and (box[0] + 1, box[1] - 1) in boxes):
+        return True
+    elif ((box[0] - 1, box[1]) in boxes and (box[0], box[1] - 1) in boxes  #cur box bottom right corner going up left
+        and (box[0] - 1, box[1] - 1) in boxes):
+        return True
+    else:
+        return False
+
 #Sub-section of helpers, search engine init/modification functions
 
 def init_iterative_gbfs_SE(initial_state, heur_fn, timebound, cc_level="full"):
@@ -489,11 +510,5 @@ if __name__=='__main__':
     
     print("\n\n\n\n\n\n\n\nSTART\n\n\n\n\n\n\n")
     print(ss.state_string())
-    #goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
+    goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
     
-
-
-
-
-
-
