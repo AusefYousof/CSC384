@@ -97,8 +97,8 @@ def heur_alternate(state):
 #factor to multiply (decrease) heuristic weight for iterative astar
 _WEIGHT_FACTOR = 0.5 #experimentally optimal
 #Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
-_wRB = 1
-_wBS = 0.5 
+_wRB = 0 #observing the solver priorize RB distance with really adverse affects, limit to 0 for now ( :( )
+_wBS = 1 
 
 _LEFT_WALL = 1
 _TOP_WALL = 2
@@ -255,7 +255,6 @@ def iterative_gbfs(initial_state, heur_fn, timebound=5):  # only use h(n)
         if better_goal_state:
             costbound[0] = better_goal_state.gval if better_goal_state.gval <= costbound[0] else costbound[0]
     
-
     if better_goal_state:
         return better_goal_state, better_stats
     else:
@@ -352,8 +351,6 @@ def deadlock(box, boxes, obstacles, height, width):
         for obst1, obst2 in [deadlock_pair]:
             if obst1 in obstacles and obst2 in obstacles:
                 return True
-            elif obst1 in boxes and obst2 in boxes:
-                return True
 
     return False
 
@@ -430,7 +427,7 @@ def init_iterative_gbfs_SE(initial_state, heur_fn, timebound, cc_level="full"):
     start_time = os.times()[0]
 
     SE = SearchEngine(strategy="best_first", cc_level="full")
-    SE.trace_on(level=2)
+    SE.trace_on(level=0)
     SE.init_search(initial_state, goal_fn=sokoban_goal_state,
                    heur_fn=heur_fn)
     
@@ -484,18 +481,16 @@ def adjust_SE(SE, initial_state, heur_fn, new_weight):
 if __name__=='__main__':
     ss = SokobanState("START", 0, None, 8, 8,  # dimensions
                  ((0, 5), (1, 6), (2, 7)),  # robots
-                 frozenset(((5, 6), (4, 5), (6, 2), (5, 2), (4, 6))),  # boxes
+                 frozenset(((5, 4), (5, 5), (6, 3), (4, 2), (6, 5), (5, 3))),  # boxes
                  frozenset(((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2))),  # storage
                  frozenset()  # obstacles
-                 )
+                )
     
     
     print("\n\n\n\n\n\n\n\nSTART\n\n\n\n\n\n\n")
     print(ss.state_string())
-    goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
-#
-  #  if not goal_state:
- #       print("No solution found")
+    #goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
+    
 
 
 
