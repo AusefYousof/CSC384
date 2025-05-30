@@ -10,6 +10,22 @@ import math  # for infinity
 from search import *  # for search engines
 from sokoban import sokoban_goal_state, SokobanState, Direction, PROBLEMS  # for Sokoban specific classes and problems
 
+# CONSTANTS
+#factor to multiply (decrease) heuristic weight for iterative astar
+_WEIGHT_FACTOR = 0.5 #experimentally optimal
+#Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
+_wRB = 0 #want this for astar, other algos dont really benefit
+_wRB_ASTAR = 0.5
+_wBS = 1
+#Dynamically assigned 
+_ASTAR = 0 #assign weight based on algorithm in use (basically if astar wRB =/= 0)
+
+#for deadlocks against walls
+_LEFT_WALL = 1
+_TOP_WALL = 2
+_RIGHT_WALL = 3
+_BOTTOM_WALL = 4
+
 # SOKOBAN HEURISTICS
 def heur_alternate(state):
     # IMPLEMENT
@@ -81,6 +97,26 @@ def heur_alternate(state):
     robot to box proximity consideration and deadlock check doesnt do anything to help either,
     we should calculate the shortest distance from box to storage and remove that from storage so boxes after
     do not consider a storage spot that will be taken up down the line. 
+
+    Final Update:
+    We are now checking for these deadlocks 
+    XXXXXXXXXXXXXXXXXXXXXXXXXX              
+    X                        X
+    X    BB                  X
+    X    BB                  X
+    X                        X
+    XXXXXXXXXXXXXXXXXXXXXXXXXX
+
+    XXXXXXXXXXXXXXXXXXXXXXXXXX
+    X                  BB    X
+    XB                      BX
+    XB                      BX
+    X            BB          X
+    XXXXXXXXXXXXXXXXXXXXXXXXXX
+
+    2x2 (or beyond such as 3x2) none of the boxes can be moved, heuristic should show infinity, and if two adjacent
+    boxes cling to a wall, they are immovable, iterative astar benefits from wRB but the other search algorithms dont,
+    will dyamically assign that weight based on the algorithm. 
     """
 
     for box in state.boxes:
@@ -88,22 +124,11 @@ def heur_alternate(state):
             if (deadlock(box, state.boxes, state.obstacles, state.height, state.width)):
                 return math.inf
 
-    #made improvement on heur_manhattan_distance
-    #return heur_manhattan_distance(state)
+    _wrb = _wRB_ASTAR
+    if (not _ASTAR):
+        _wrb = _wRB
 
-    return _wRB * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * pairwise_manhattan(state.boxes, state.storage)
-
-# CONSTANTS
-#factor to multiply (decrease) heuristic weight for iterative astar
-_WEIGHT_FACTOR = 0.5 #experimentally optimal
-#Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
-_wRB = 0 #observing the solver priorize RB distance with really adverse affects, limit to 0 for now ( :( )
-_wBS = 1
-
-_LEFT_WALL = 1
-_TOP_WALL = 2
-_RIGHT_WALL = 3
-_BOTTOM_WALL = 4
+    return _wrb * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * pairwise_manhattan(state.boxes, state.storage)
 
 def heur_zero(state):
     '''Zero Heuristic can be used to make A* search perform uniform cost search'''
@@ -149,6 +174,9 @@ def weighted_astar(initial_state, heur_fn, weight, timebound):
     '''OUTPUT: A goal state (if a goal is found), else False as well as a SearchStats object'''
     '''implementation of weighted astar algorithm'''
 
+    global _ASTAR
+    _ASTAR = 1
+
     timebound -= 0.015
 
     SE, setup_time = init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level="full")
@@ -161,6 +189,9 @@ def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n)
     '''INPUT: a sokoban state that represents the start state and a timebound (number of seconds)'''
     '''OUTPUT: A goal state (if a goal is found), else False as well as a SearchStats object'''
     '''implementation of iterative astar algorithm'''
+
+    global _ASTAR
+    _ASTAR = 1
 
     #initial autograder test prints time search is taking, tend to take ~0.01 longer than timebound,
     #subtract 0.015 from given timebound so search accounts for this
@@ -221,6 +252,9 @@ def iterative_gbfs(initial_state, heur_fn, timebound=5):  # only use h(n)
     '''INPUT: a sokoban state that represents the start state and a timebound (number of seconds)'''
     '''OUTPUT: A goal state (if a goal is found), else False'''
     '''implementation of iterative gbfs algorithm'''
+
+    global _ASTAR
+    _ASTAR = 0
 
     timebound -= 0.015
 
@@ -363,6 +397,8 @@ def attached_to_wall(box, height, width):
     Check if box is attached to wall
 
     @param box: box to check for
+    @param height: height of board
+    @param width: width of board
     @rtype: int -> True if box attached to wall, False if not
     """
     if (box[0] - 1 < 0):
@@ -412,10 +448,28 @@ def pairwise_manhattan(boxes, storage):
     return total_cost
 
 def manhattan_helper(p1, p2):
-    #small helper to get manhattan of two points used in pairwise_manhattan
+    """
+    Manhattan distance |y2 - y1| + |x2 -x1| between two points
+
+    @param p1: point 1
+    @param p2: point 2
+    @rtype: int -> manhattan distance b/w p1 & p2
+    """
+
     return abs(p2[0] - p1[0]) + abs(p2[1] - p1[1])
 
 def check_2x2_deadlock(box, boxes):
+    """
+    Check for 2x2 deadlock (also effectively anything beyond 2x2)
+    4 boxes connected to each other to make a square are immovable
+
+    BB
+    BB
+
+    @param box: box of focus
+    @param boxes: rest of the boxes
+    @rtype: bool -> 2x2 deadlock?
+    """
 
     if ((box[0] + 1, box[1]) in boxes and (box[0], box[1] + 1) in boxes #cur box top right corner going down right
         and (box[0] + 1, box[1] + 1) in boxes):
@@ -433,7 +487,6 @@ def check_2x2_deadlock(box, boxes):
         return False
 
 #Sub-section of helpers, search engine init/modification functions
-
 def init_iterative_gbfs_SE(initial_state, heur_fn, timebound, cc_level="full"):
     """
     Initialize a search engine object for iterative gbfs
@@ -497,18 +550,4 @@ def adjust_SE(SE, initial_state, heur_fn, new_weight):
 
     SE.init_search(initial_state, goal_fn=sokoban_goal_state, 
                    heur_fn=heur_fn, fval_function=wrapped_fval_function)
-    
-
-if __name__=='__main__':
-    ss = SokobanState("START", 0, None, 8, 8,  # dimensions
-                 ((0, 5), (1, 6), (2, 7)),  # robots
-                 frozenset(((5, 4), (5, 5), (6, 3), (4, 2), (6, 5), (5, 3))),  # boxes
-                 frozenset(((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2))),  # storage
-                 frozenset()  # obstacles
-                )
-    
-    
-    print("\n\n\n\n\n\n\n\nSTART\n\n\n\n\n\n\n")
-    print(ss.state_string())
-    goal_state, stats = iterative_gbfs(ss, heur_alternate, timebound = 2)
     
