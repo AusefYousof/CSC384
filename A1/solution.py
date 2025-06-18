@@ -10,22 +10,6 @@ import math  # for infinity
 from search import *  # for search engines
 from sokoban import sokoban_goal_state, SokobanState, Direction, PROBLEMS  # for Sokoban specific classes and problems
 
-# CONSTANTS
-#factor to multiply (decrease) heuristic weight for iterative astar
-_WEIGHT_FACTOR = 0.5 #experimentally optimal
-#Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
-_wRB = 0 #want this for astar, other algos dont really benefit
-_wRB_ASTAR = 0.5
-_wBS = 1
-#Dynamically assigned 
-_ASTAR = 0 #assign weight based on algorithm in use (basically if astar wRB =/= 0)
-
-#for deadlocks against walls
-_LEFT_WALL = 1
-_TOP_WALL = 2
-_RIGHT_WALL = 3
-_BOTTOM_WALL = 4
-
 # SOKOBAN HEURISTICS
 def heur_alternate(state):
     # IMPLEMENT
@@ -124,9 +108,7 @@ def heur_alternate(state):
             if (deadlock(box, state.boxes, state.obstacles, state.height, state.width)):
                 return math.inf
 
-    _wrb = _wRB_ASTAR
-    if (not _ASTAR):
-        _wrb = _wRB
+    _wrb = _wRB_ASTAR if _ASTAR else _wRB
 
     return _wrb * manhattan_robot_to_box(state.robots, state.boxes) + _wBS * pairwise_manhattan(state.boxes, state.storage)
 
@@ -176,12 +158,15 @@ def weighted_astar(initial_state, heur_fn, weight, timebound):
 
     global _ASTAR
     _ASTAR = 1
-
     timebound -= 0.015
 
     SE, setup_time = init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level="full")
 
-    return SE.search(timebound=timebound - setup_time)
+    goal_node, stats = SE.search(timebound=timebound - setup_time)
+    #clear astar flag for any other search algorithms follow up
+    _ASTAR = 0
+
+    return goal_node, stats
 
 def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n), see how autograder initializes a search line 88
     # IMPLEMENT
@@ -196,7 +181,6 @@ def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n)
     #initial autograder test prints time search is taking, tend to take ~0.01 longer than timebound,
     #subtract 0.015 from given timebound so search accounts for this
     timebound -= 0.015
-
     goal_state, better_goal_state = None, None
 
     SE, setup_time = init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level="full")
@@ -239,7 +223,7 @@ def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n)
         if better_goal_state:
             costbound[2] = better_goal_state.gval if better_goal_state.gval <= costbound[2] else costbound[2]
 
-
+    _ASTAR = 0
     #if we managed to find something better, return that
     if better_goal_state:
         return better_goal_state, better_stats
@@ -255,7 +239,6 @@ def iterative_gbfs(initial_state, heur_fn, timebound=5):  # only use h(n)
 
     global _ASTAR
     _ASTAR = 0
-
     timebound -= 0.015
 
     #Follows general structure of iterative a star, refer to iterative_astar() for comments
@@ -551,3 +534,19 @@ def adjust_SE(SE, initial_state, heur_fn, new_weight):
     SE.init_search(initial_state, goal_fn=sokoban_goal_state, 
                    heur_fn=heur_fn, fval_function=wrapped_fval_function)
     
+# CONSTANTS
+#factor to multiply (decrease) heuristic weight for iterative astar
+_WEIGHT_FACTOR = 0.5 #experimentally optimal
+#Custom heuristic weights, wRB = weight robot to box, wBS = weight box to storage
+_wRB = 0 #want this for astar, other algos dont really benefit
+_wRB_ASTAR = 0.7
+_wBS = 1
+#Dynamically assigned 
+_ASTAR = 0 #assign weight based on algorithm in use (basically if astar wRB =/= 0)
+
+#for deadlocks against walls
+_LEFT_WALL = 1
+_TOP_WALL = 2
+_RIGHT_WALL = 3
+_BOTTOM_WALL = 4
+
