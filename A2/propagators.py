@@ -64,6 +64,8 @@ Ausef Yousof - CSC384 A2 Summer 2025
          for gac we initialize the GAC queue with all constraints containing V.
    '''
 
+from cspbase import *
+
 def prop_BT(csp, newVar=None):
     '''Do plain backtracking propagation. That is, do no 
     propagation at all. Just check fully instantiated constraints'''
@@ -95,7 +97,7 @@ def prop_FC(csp, newVar=None):
         constraints = csp.get_all_cons()
     
     for c in constraints:
-        if c.get_n_unasign() == 1:
+        if c.get_n_unasgn() == 1:
             dwo, pruned_c = fc_helper(c)
             pruned += pruned_c
 
@@ -114,17 +116,40 @@ def prop_GAC(csp, newVar=None):
     #dont do this constraint wise in top level f'n because we will maintain
     #a dynamic list of constraints for gac processing
     if newVar:
-        return GAC_helper(csp.get_cons_with_var(newVar))
+        return GAC_helper(csp, csp.get_cons_with_var(newVar))
     else:
-        return GAC_helper(csp.get_all_cons)
+        return GAC_helper(csp, csp.get_all_cons())
         
 
 '''
 HELPERS
 '''
-def GAC_helper(constraints):
-    return True
-    
+def GAC_helper(csp, cons):
+
+    pruned = []
+    constraints = list(cons)
+    while constraints:
+        constraint = constraints.pop(0)
+        dwo = True
+        for var in constraint.get_scope():
+            for dv in var.cur_domain():
+                if not constraint.has_support(var, dv):
+                    var.prune_value(dv)
+                    pruned.append((var, dv))
+                    GAC_reAdd_to_queue(var, csp.get_cons_with_var(var), constraints)
+                else:
+                    dwo = False #found a support, no need to BT
+            if dwo:
+                return False, pruned #we had DWO from GAC, need to BT
+            
+    return True, pruned
+            
+
+def GAC_reAdd_to_queue(var, cons_affected, constraints):
+
+    for c in cons_affected:
+        if c not in constraints:
+            constraints.append(c)
 
 
 def fc_helper(c):
