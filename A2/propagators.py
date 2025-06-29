@@ -1,6 +1,10 @@
 #Look for #IMPLEMENT tags in this file. These tags indicate what has
 #to be implemented to complete problem solution.  
 
+'''
+Ausef Yousof - CSC384 A2 Summer 2025
+'''
+
 '''This file will contain different constraint propagators to be used within 
    bt_search.
 
@@ -82,9 +86,75 @@ def prop_FC(csp, newVar=None):
        track of all pruned variable,value pairs and return '''
     #IMPLEMENT
 
+    pruned = []
+    dwo = True
+
+    if newVar:
+        constraints = csp.get_cons_with_var(newVar)
+    else:
+        constraints = csp.get_all_cons()
+    
+    for c in constraints:
+        if c.get_n_unasign() == 1:
+            dwo, pruned_c = fc_helper(c)
+            pruned += pruned_c
+
+            #can stop checking early if DWO for any var, and need to backtrack
+            if dwo:
+                return False, pruned
+    
+    return True, pruned     
+
 def prop_GAC(csp, newVar=None):
     '''Do GAC propagation. If newVar is None we do initial GAC enforce 
        processing all constraints. Otherwise we do GAC enforce with
        constraints containing newVar on GAC Queue'''
     #IMPLEMENT
-    return False, []
+
+    #dont do this constraint wise in top level f'n because we will maintain
+    #a dynamic list of constraints for gac processing
+    if newVar:
+        return GAC_helper(csp.get_cons_with_var(newVar))
+    else:
+        return GAC_helper(csp.get_all_cons)
+        
+
+'''
+HELPERS
+'''
+def GAC_helper(constraints):
+    return True
+    
+
+
+def fc_helper(c):
+    pruned = []
+    dwo = True
+
+    vals, unasgned, unasgned_idx = assemble_vals_FC(c)
+
+    for dv in unasgned.cur_domain():
+        vals[unasgned_idx] = dv
+        if c.check(vals):
+            dwo = False #we found a support
+        else:
+            #do pruning
+            if unasgned.in_cur_domain(dv):
+                unasgned.prune_value(dv)
+                pruned.append((unasgned, dv)) #(Variable, value)
+        
+    return dwo, pruned
+
+def assemble_vals_FC(c):
+    vals = []
+    i = -1
+    unasgned = c.get_unasgn_vars()[0] #FC = only one unassigned var
+    for i, var in enumerate(c.get_scope()):
+        if var == unasgned:
+            #temporary, must be careful to overwrite with test domain values
+            vals.append(-1) 
+            unasgned_idx = i
+        else:
+            vals.append(var.get_assigned_value())
+
+    return vals, unasgned, unasgned_idx

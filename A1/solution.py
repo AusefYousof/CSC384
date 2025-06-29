@@ -180,12 +180,12 @@ def iterative_astar(initial_state, heur_fn, weight=1, timebound=5):  # uses f(n)
 
     #initial autograder test prints time search is taking, tend to take ~0.01 longer than timebound,
     #subtract 0.015 from given timebound so search accounts for this
-    timebound -= 0.015
+    #timebound -= 0.015
     goal_state, better_goal_state = None, None
 
     SE, setup_time = init_weighted_astar_SE(initial_state, heur_fn, weight, cc_level="full")
     
-    timebound -= setup_time
+    #timebound -= setup_time
     goal_state, stats = SE.search(timebound)
 
     #track when we began searching and when we are to stop
