@@ -5,6 +5,10 @@
 #   You may not remove any imports.
 #   You may not import or otherwise source any of your own files
 
+'''
+Ausef Yousof - CSC384 A2 Summer 2025
+'''
+
 import os  # for time functions
 import math  # for infinity
 from search import *  # for search engines
