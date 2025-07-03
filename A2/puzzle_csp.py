@@ -39,16 +39,13 @@ from itertools import combinations
 def binary_ne_grid(fpuzz_grid):
     ##IMPLEMENT
 
-    #Binary not equal constraints on variables for row and column
-    #Two vars in the same row cannot be equal, same col cannot be equal
-
     size = fpuzz_grid[0][0]
     encodings = fpuzz_grid[1:]
 
     vars = []
 
-    for i in range(len(size*size)):
-        vars.append(Variable(name=get_var_name(size, i)), domain=list(range(1, size+1)))
+    for i in range(size*size):
+        vars.append(Variable(name=get_var_name(size, i), domain=list(range(1, size+1))))
     
     csp = CSP(name="binary_ne", vars = vars)
     csp = add_binary_ne_constraints(csp, vars, size)
@@ -57,12 +54,13 @@ def binary_ne_grid(fpuzz_grid):
     
 
 def nary_ad_grid(fpuzz_grid):
-    
+    ##IMPLEMENT 
+
     size = fpuzz_grid[0][0]
 
     vars = [] 
-    for i in range(len(size*size)):
-        vars.append(Variable(name=get_var_name(size, i)), domain=list(range(1, size+1)))
+    for i in range(size*size):
+        vars.append(Variable(name=get_var_name(size, i), domain=list(range(1, size+1))))
 
     csp = CSP(name="nary_ne", vars = vars)
     csp = add_nary_ne_constraints(csp, vars, size)
@@ -73,17 +71,123 @@ def nary_ad_grid(fpuzz_grid):
 def caged_csp(fpuzz_grid):
     ##IMPLEMENT 
 
-    return True
+    csp, var_array = binary_ne_grid(fpuzz_grid)
+    csp.name="Caged"
+    size = fpuzz_grid[0][0]
+    encodings = fpuzz_grid[1:]
 
+    for constraint in get_cage_constraints(csp, encodings, size):
+        csp.add_constraint(constraint)
+
+    return csp, var_array
 '''
 HELPERS
 '''
+
+def get_cage_constraints(csp, cages, size):
+
+    constraints = []
+    domain = list(range(1, size+1))
+
+    for cage in cages:
+        num_of_cells = 0
+        affected_vars = []
+
+        if len(cage) == 2: #cell number, value
+            #single cell
+            cage_con = Constraint(name="="+str(cage[-1]),
+                                   scope=[get_var_from_encoding((cage[0]), csp.vars)])
+            cage_con.add_satisfying_tuples([(cage[-1],)])
+
+            constraints.append(cage_con)
+            continue
+        
+        operation = cage[-1]
+        result = cage[-2]
+        
+        for i in range(len(cage) - 2):
+            num_of_cells += 1
+            affected_vars.append(get_var_from_encoding(cage[i], csp.vars))
+        
+        cage_con = Constraint(name=str(operation) + str(result), scope=affected_vars)
+
+        if (operation == 0):
+            satisfying = [p for p in itertools.permutations(domain, num_of_cells) 
+                         if sum(p) == result]
+            
+        elif (operation == 1):
+            satisfying = []
+            for p in itertools.permutations(domain, num_of_cells):
+                if (any_subtract_order_valid(p, result)):
+                    satisfying.append(p)
+
+        elif (operation == 2):
+            satisfying = []
+            for p in itertools.permutations(domain, num_of_cells):
+                if (any_divide_order_valid(p, result)):
+                    satisfying.append(p)
+
+        elif (operation == 3):
+            satisfying = [p for p in itertools.permutations(domain, num_of_cells) 
+                         if product_of(p) == result]
+        
+        cage_con.add_satisfying_tuples(satisfying)
+        
+        constraints.append(cage_con)
+    
+    return constraints
+            
+def any_subtract_order_valid(p, result):
+    nums = list(p)
+
+    #flip all (subtraction)
+    for num in nums:
+        num *= -1
+    
+    for i in range(len(nums)):
+        #flip one (first var)
+        nums[i] *= -1
+        #sum all (subtract the rest)
+        if sum(nums) == result:
+            return True
+        else:
+            #flip back move onto next
+            nums[i] *= -1
+
+def any_divide_order_valid(p, result):
+    for perm in itertools.permutations(p, len(p)):
+        start = perm[0]
+        for i in range(len(perm)):
+            if i != 0:
+                start /= perm[i]
+        
+        if start == result:
+            return True
+            
+
+    
+def product_of(values):
+    ret = 1
+    for v in values:
+        ret *= v
+
+    return ret
+                
+
+def get_var_from_encoding(encoding, vars):
+
+    encoding = str(encoding)
+
+    for var in vars:
+        if (str(var.name[0] + var.name[2]) == encoding):
+            return var
 
 def get_var_name(size, i):
     '''
     When generating variables specify row_col as var name for easy grouping
     cell 1_1 is top left
     '''
+    #this is for iterating over variables in a list (ungrouped)
     row = (i // size) + 1
     col = (i % size) + 1
     return f"{row}_{col}"
@@ -96,7 +200,7 @@ def group_by_row(vars, size):
     rows = [[] for _ in range(size)]
     for var in vars:
         row = int(var.name.split('_')[0])
-        rows[row].append(var)
+        rows[row-1].append(var)
     return rows
 
 def group_by_col(vars, size):
@@ -108,7 +212,7 @@ def group_by_col(vars, size):
     cols = [[] for _ in range(size)]
     for var in vars:
         col = int(var.name.split('_')[1])
-        cols[col].append(var)
+        cols[col-1].append(var)
     return cols
 
 def add_binary_ne_constraints(csp, vars, size):
@@ -144,8 +248,8 @@ def init_binary_consts(row_or_col, domain):
     constraints = []
 
     for combination in list(combinations(row_or_col, 2)):
-            new_constraint = Constraint(name=combination[0] + " and " + 
-                                        combination[1], scope = combination)
+            new_constraint = Constraint(name=str(combination[0]) + " and " + 
+                                        str(combination[1]), scope = combination)
             new_constraint.add_satisfying_tuples([(i, j) for i in domain for j in domain if i != j])
             constraints.append(new_constraint)
     

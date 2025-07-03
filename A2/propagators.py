@@ -89,7 +89,6 @@ def prop_FC(csp, newVar=None):
     #IMPLEMENT
 
     pruned = []
-    dwo = True
 
     if newVar:
         constraints = csp.get_cons_with_var(newVar)
@@ -124,34 +123,6 @@ def prop_GAC(csp, newVar=None):
 '''
 HELPERS
 '''
-def GAC_helper(csp, cons):
-
-    pruned = []
-    constraints = list(cons)
-    while constraints:
-        constraint = constraints.pop(0)
-        dwo = True
-        for var in constraint.get_scope():
-            for dv in var.cur_domain():
-                if not constraint.has_support(var, dv):
-                    var.prune_value(dv)
-                    pruned.append((var, dv))
-                    GAC_reAdd_to_queue(var, csp.get_cons_with_var(var), constraints)
-                else:
-                    dwo = False #found a support, no need to BT
-            if dwo:
-                return False, pruned #we had DWO from GAC, need to BT
-            
-    return True, pruned
-            
-
-def GAC_reAdd_to_queue(var, cons_affected, constraints):
-
-    for c in cons_affected:
-        if c not in constraints:
-            constraints.append(c)
-
-
 def fc_helper(c):
     pruned = []
     dwo = True
@@ -167,6 +138,10 @@ def fc_helper(c):
             if unasgned.in_cur_domain(dv):
                 unasgned.prune_value(dv)
                 pruned.append((unasgned, dv)) #(Variable, value)
+    
+    if (dwo):
+        for var, v in pruned:
+            var.unprune_value(v)
         
     return dwo, pruned
 
@@ -183,3 +158,31 @@ def assemble_vals_FC(c):
             vals.append(var.get_assigned_value())
 
     return vals, unasgned, unasgned_idx
+
+def GAC_helper(csp, cons):
+
+    pruned = []
+    constraints = list(cons)
+    while constraints:
+        constraint = constraints.pop(0)
+        dwo = True
+        for var in constraint.get_scope():
+            for dv in var.cur_domain():
+                if not constraint.has_support(var, dv):
+                    var.prune_value(dv)
+                    pruned.append((var, dv))
+                    GAC_reAdd_to_queue(var, csp.get_cons_with_var(var), constraints)
+                else:
+                    dwo = False #found a support, no need to BT
+            if dwo:
+                for var, v in pruned:
+                    var.unprune_value(v)
+                return False, pruned #we had DWO from GAC, need to BT
+            
+    return True, pruned
+            
+def GAC_reAdd_to_queue(var, cons_affected, constraints):
+
+    for c in cons_affected:
+        if c not in constraints:
+            constraints.append(c)
