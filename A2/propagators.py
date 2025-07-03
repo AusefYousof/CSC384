@@ -120,10 +120,17 @@ def prop_GAC(csp, newVar=None):
         return GAC_helper(csp, csp.get_all_cons())
         
 
-'''
-HELPERS
-'''
+###########################################################
+#HELPERS
+###########################################################
+
+
 def fc_helper(c):
+    '''
+    Forward checking helper, gets unassigned variable and checks each
+    domain value for support, prunes those that dont,
+    if we dont have at least one support, we have dwo, unprune and return false
+    '''
     pruned = []
     dwo = True
 
@@ -146,6 +153,10 @@ def fc_helper(c):
     return dwo, pruned
 
 def assemble_vals_FC(c):
+    '''
+    Get unassigned variable and assigned values for other variables
+    to use in fc_helper to check unassigned vars dv's for support
+    '''
     vals = []
     i = -1
     unasgned = c.get_unasgn_vars()[0] #FC = only one unassigned var
@@ -160,7 +171,10 @@ def assemble_vals_FC(c):
     return vals, unasgned, unasgned_idx
 
 def GAC_helper(csp, cons):
-
+    '''
+    Does most of the work related to GAC processing, that is, maintaining constraint
+    queue, checking for support, pruning, checking for dwo, etc.
+    '''
     pruned = []
     constraints = list(cons)
     while constraints:
@@ -182,7 +196,9 @@ def GAC_helper(csp, cons):
     return True, pruned
             
 def GAC_reAdd_to_queue(var, cons_affected, constraints):
-
+    '''
+    Add affected constraints back to end of queue
+    '''
     for c in cons_affected:
         if c not in constraints:
             constraints.append(c)

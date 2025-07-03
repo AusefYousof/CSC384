@@ -38,7 +38,12 @@ from itertools import combinations
 
 def binary_ne_grid(fpuzz_grid):
     ##IMPLEMENT
-
+    '''
+    Given funpuzz grid return csp and list of vars,
+    csp has binary not equal constraints to mimic the sudoku like
+    constraints of funpuzz (no two numbers in a row or col)
+    can equal each other
+    '''
     size = fpuzz_grid[0][0]
     encodings = fpuzz_grid[1:]
 
@@ -55,6 +60,11 @@ def binary_ne_grid(fpuzz_grid):
 
 def nary_ad_grid(fpuzz_grid):
     ##IMPLEMENT 
+    '''
+    Given funpuzz grid return csp and list of vars,
+    csp has nary not equal constraints to mimic the sudoku like
+    constraints of funpuzz all numbers in a col or row must be diff
+    '''
 
     size = fpuzz_grid[0][0]
 
@@ -70,6 +80,12 @@ def nary_ad_grid(fpuzz_grid):
 
 def caged_csp(fpuzz_grid):
     ##IMPLEMENT 
+    '''
+    Given funpuzz grid return csp and list of vars,
+    csp has binary not equal constraints from binary_ne_grid
+    to satisfy that aspect of the game, and also builds
+    cage constraints
+    '''
 
     csp, var_array = binary_ne_grid(fpuzz_grid)
     csp.name="Caged"
@@ -80,69 +96,22 @@ def caged_csp(fpuzz_grid):
         csp.add_constraint(constraint)
 
     return csp, var_array
-'''
-HELPERS
-'''
 
-def get_cage_constraints(csp, cages, size):
 
-    constraints = []
-    domain = list(range(1, size+1))
-
-    for cage in cages:
-        num_of_cells = 0
-        affected_vars = []
-
-        if len(cage) == 2: #cell number, value
-            #single cell
-            cage_con = Constraint(name="="+str(cage[-1]),
-                                   scope=[get_var_from_encoding((cage[0]), csp.vars)])
-            cage_con.add_satisfying_tuples([(cage[-1],)])
-
-            constraints.append(cage_con)
-            continue
-        
-        operation = cage[-1]
-        result = cage[-2]
-        
-        for i in range(len(cage) - 2):
-            num_of_cells += 1
-            affected_vars.append(get_var_from_encoding(cage[i], csp.vars))
-        
-        cage_con = Constraint(name=str(operation) + str(result), scope=affected_vars)
-
-        if (operation == 0):
-            satisfying = [p for p in itertools.permutations(domain, num_of_cells) 
-                         if sum(p) == result]
-            
-        elif (operation == 1):
-            satisfying = []
-            for p in itertools.permutations(domain, num_of_cells):
-                if (any_subtract_order_valid(p, result)):
-                    satisfying.append(p)
-
-        elif (operation == 2):
-            satisfying = []
-            for p in itertools.permutations(domain, num_of_cells):
-                if (any_divide_order_valid(p, result)):
-                    satisfying.append(p)
-
-        elif (operation == 3):
-            satisfying = [p for p in itertools.permutations(domain, num_of_cells) 
-                         if product_of(p) == result]
-        
-        cage_con.add_satisfying_tuples(satisfying)
-        
-        constraints.append(cage_con)
-    
-    return constraints
+###########################################################
+#HELPERS
+###########################################################
             
 def any_subtract_order_valid(p, result):
+    '''
+    Is the given set of values p somehow arrangable to equal the result
+    if we subtract them? (w-x-y-z, first num is positive)
+    '''
     nums = list(p)
 
     #flip all (subtraction)
-    for num in nums:
-        num *= -1
+    for num in range(len(nums)):
+        nums[num] *= -1
     
     for i in range(len(nums)):
         #flip one (first var)
@@ -155,7 +124,11 @@ def any_subtract_order_valid(p, result):
             nums[i] *= -1
 
 def any_divide_order_valid(p, result):
-    for perm in itertools.permutations(p, len(p)):
+    '''
+    Given permutation of possible values for vars p, is there a way to arrange
+    them such that we = result
+    '''
+    for perm in itertools.product(p, repeat=len(p)):
         start = perm[0]
         for i in range(len(perm)):
             if i != 0:
@@ -164,18 +137,21 @@ def any_divide_order_valid(p, result):
         if start == result:
             return True
             
-
-    
 def product_of(values):
+    '''
+    Product of all numbers in a list
+    '''
     ret = 1
     for v in values:
         ret *= v
 
     return ret
                 
-
 def get_var_from_encoding(encoding, vars):
 
+    '''
+    Given a vars encoding of row_col, find that var and return it 
+    '''
     encoding = str(encoding)
 
     for var in vars:
@@ -214,6 +190,8 @@ def group_by_col(vars, size):
         col = int(var.name.split('_')[1])
         cols[col-1].append(var)
     return cols
+
+#BINARY HELPERS
 
 def add_binary_ne_constraints(csp, vars, size):
 
@@ -255,6 +233,9 @@ def init_binary_consts(row_or_col, domain):
     
     return constraints
 
+
+#NARY HELPERS
+
 def add_nary_ne_constraints(csp, vars, size):
     '''
     Add the generated nary constraints to csp
@@ -277,7 +258,6 @@ def add_nary_ne_constraints(csp, vars, size):
 
     return csp
 
-
 def init_nary_consts(row_or_col, domain, size):
     '''
     Generate nary constraints, that is, for a given row or column, generate
@@ -289,3 +269,65 @@ def init_nary_consts(row_or_col, domain, size):
         new_constraint.add_satisfying_tuples(tuple(pm))
 
     return [new_constraint]
+
+#CAGE HELPERS
+
+def get_cage_constraints(csp, cages, size):
+
+    '''
+    Given a set of cages (fpuzz_grid[1:]) go through each cage and construct
+    a constraint to represent it, cages of length two are of the form
+    [cell, result] i.e that cell must = that value, that is its own type of constraint,
+    all other constraints have last element operation (0 = +, 1 = -, 2 = /, 3 = *)
+    Find tuples to satisfy that constraint and add it to csp list of constraints
+    '''
+
+    constraints = []
+    domain = list(range(1, size+1))
+
+    for cage in cages:
+        num_of_cells = 0
+        affected_vars = []
+
+        if len(cage) == 2: #cell number, value
+            #single cell
+            cage_con = Constraint(name="="+str(cage[-1]),
+                                   scope=[get_var_from_encoding((cage[0]), csp.vars)])
+            cage_con.add_satisfying_tuples([(cage[-1],)])
+            constraints.append(cage_con)
+
+            continue
+        
+        operation = cage[-1]
+        result = cage[-2]
+        
+        for i in range(len(cage) - 2):
+            num_of_cells += 1
+            affected_vars.append(get_var_from_encoding(cage[i], csp.vars))
+        
+        cage_con = Constraint(name=str(operation) + str(result), scope=affected_vars)
+        if (operation == 0):
+            satisfying = [p for p in itertools.product(domain, repeat=num_of_cells) 
+                         if sum(p) == result]
+            
+        elif (operation == 1):
+            satisfying = []
+            for p in itertools.product(domain, repeat=num_of_cells):
+                if (any_subtract_order_valid(p, result)):
+                    satisfying.append(p)
+
+        elif (operation == 2):
+            satisfying = []
+            for p in itertools.product(domain, repeat=num_of_cells):
+                if (any_divide_order_valid(p, result)):
+                    satisfying.append(p)
+
+        elif (operation == 3):
+            satisfying = [p for p in itertools.product(domain, repeat=num_of_cells) 
+                         if product_of(p) == result]
+        
+        cage_con.add_satisfying_tuples(satisfying)   
+
+        constraints.append(cage_con)
+
+    return constraints
