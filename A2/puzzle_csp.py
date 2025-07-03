@@ -1,4 +1,9 @@
 #Look for #IMPLEMENT tags in this file.
+
+'''
+Ausef Yousof - CSC384 A2 Summer 2025
+'''
+
 '''
 All encodings need to return a CSP object, and a list of lists of Variable objects 
 representing the board. The returned list of lists is used to access the 
