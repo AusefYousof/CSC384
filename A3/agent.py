@@ -7,6 +7,49 @@ import sys
 import time
 import math
 
+'''
+Heuristic Discussion (see compute_heuristic for implementation)
+
+Will be using the 3 tips given by lab handout and expanding on them.
+
+1.  Its clear that the corners are the most stable locations to place a piece since it is
+    impossible to retake, but infact and pieces are are horizontally/vertically adjacent
+    are also unable to be recaptured
+
+    Consider this board with X's marking the boundary (dimension+1 border, unplayable area),
+    W for white pieces, B for black pieces
+
+    Bottom left corner of the board, this holds for all corners
+    XWB
+    XWWB
+    XXXX
+
+    We can see that due to the existence of the W piece in the bottom left corner, both the W pieces
+    are stable, this would naturally work if the B piece was W as well.
+    This extends all the way until there is a gap in the chain, thus we can not only detect corners
+    but detect pieces whose safety is guaranteed by searching if a chain exists
+
+    XXXXXX
+    XW
+    XW
+    X
+    XW
+
+    Top 2 W pieces are safe, bottom isnt necessarily (left wall continues downwards)
+
+2.  Relatively simple, will calculate # moves for black vs # moves for white given that we make some move
+3.  Opening = priorotize obtaining more pieces with any given move
+    Middle = prioritize getting pieces to stable spots
+    End = prioritize having most number of moves available to avoid a loss
+
+    We can detect the phase of the game we are in by gathering number of pieces on the board and comparing
+    that to board dimension,
+    say 6^2 = 36 spots on a 6x6 board (not all spots used so need to lower thresholds for phases of games to more like
+    max ~= 30)
+
+    It would follow that opening ~20%, middle ~50% and endgame ~80%
+'''
+
 # You can use the functions from othello_shared to write your AI
 from othello_shared import find_lines, get_possible_moves, get_score, play_move
 
@@ -37,7 +80,99 @@ def compute_heuristic(board, color):
     INPUT: a game state and the player that is in control
     OUTPUT: an integer that represents heuristic value
     """
-    raise RuntimeError("Method not implemented") # Replace this line!
+    
+    num_spaces = len(board[0]) ** 2  #dim = len first row, dim^2 = total num pieces
+
+    total_pieces = sum(get_score(board))
+
+    ratio = total_pieces / num_spaces
+
+    if ratio <= 0.25: #early game
+        return compute_heuristic_early(board, color)
+
+    elif ratio <= 0.6:
+        return compute_heuristic_mid(board, color, weight=4)
+    
+    else:
+        return compute_heuristic_late(board, color)
+    
+def compute_heuristic_early(board, color):
+    '''
+    Early game idea is to prioritize getting max number of pieces on the board as possible
+    '''
+    return compute_utility(board, color)
+
+def compute_heuristic_mid(board, color, weight):
+    '''
+    mid game the corners/walls open up, get our pieces into stable positions
+    '''
+
+    dim = len(board[0]) -1
+
+    #Corners
+    corners = [[0,0], [dim, 0], [0, dim], [dim, dim]]
+
+    util = compute_utility(board, color)
+
+    for corner in corners:
+        if board[corner[1]][corner[0]] == color:
+            util += weight #corner pieces worth weight + 1 (itself)
+        
+            directions = get_directions(corner, dim)
+        
+            #go off in each direction starting from corner, also add the same color
+            #pieces as they are stable as well until a gap or non same color found
+            
+            for dir in directions:
+                position = [corner[0], corner[1]]
+                non_color = False
+                while not non_color:
+                    position[0] += dir[0]
+                    position[1] += dir[1]
+
+                    if check_out_of_bounds(position, dim):
+                        non_color = True
+                        continue
+                    if board[position[1]][position[0]] == color:
+                        util += weight
+                    else:
+                        non_color = True
+    
+    
+    return util
+
+def compute_heuristic_late(board, color):
+
+    #still value mvoes that get us into corners
+    util = compute_heuristic_mid(board, color, weight = 2)
+
+    #value moves left more as condition for losing
+    #is running out of them
+    for move in get_possible_moves(board, color):
+        util += 1
+    for move in get_possible_moves(board, 1 if color == 2 else 2):
+        util -= 1
+
+    return util
+
+def check_out_of_bounds(position, dim):
+    for coord in position:
+        if coord < 0 or coord >= dim:
+            return True
+
+    return False
+
+def get_directions(corner, dim):
+    if corner == [0,0]:
+        directions = [[1,0], [0,1]]
+    elif corner == [dim, 0]:
+        directions = [[0,1], [-1,0]]
+    elif corner == [0, dim]:
+        directions = [[1,0], [0,-1]]
+    elif corner == [dim, dim]:
+        directions = [[-1, 0], [0, -1]]
+
+    return directions
 
 ############ MINIMAX ###############################
 def minimax_min_node(board, color, limit, caching = 0):
@@ -56,9 +191,11 @@ def minimax_min_node(board, color, limit, caching = 0):
     moves = get_possible_moves(board, 2 if color == 1 else 1)
     chosen_move = None
 
-
-    if caching and (board, color) in cache:
-        return cache[board, color]
+    if caching and (str(board), color) in cache:
+        return cache[str(board), color]
+    
+    if limit == 0:
+       return (None, compute_heuristic(board, color))
 
     if len(moves) == 0 or limit == 0:
         return (None, compute_utility(board, color))
@@ -72,7 +209,7 @@ def minimax_min_node(board, color, limit, caching = 0):
             chosen_move = move
     
     if caching:
-        cache[(board, color)] = (chosen_move, min_utility)
+        cache[(str(board), color)] = (chosen_move, min_utility)
     
     return (chosen_move, min_utility)
 
@@ -92,8 +229,11 @@ def minimax_max_node(board, color, limit, caching = 0):
     moves = get_possible_moves(board, color)
     chosen_move = None
 
-    if caching and (board, color) in cache:
-        return cache[board, color]
+    if caching and (str(board), color) in cache:
+        return cache[str(board), color]
+    
+    if limit == 0:
+        return (None, compute_heuristic(board, color))
 
     if len(moves) == 0 or limit == 0:
         return (None, compute_utility(board, color))
@@ -108,7 +248,7 @@ def minimax_max_node(board, color, limit, caching = 0):
             chosen_move = move
 
     if caching:
-        cache[(board, color)] = (chosen_move, max_utility)
+        cache[(str(board), color)] = (chosen_move, max_utility)
     
     return (chosen_move, max_utility)
 
@@ -138,8 +278,8 @@ def alphabeta_min_node(board, color, alpha, beta, limit, caching = 0, ordering =
     """
     A helper function for alpha-beta that finds the lowest possible utility (don't forget to utilize and update alpha and beta!)
     """
-    if caching and (board, color) in cache:
-        return cache[board, color]
+    if caching and (str(board), color) in cache:
+        return cache[str(board), color]
 
     if ordering:
         moves = get_sorted_moves(board, 2 if color == 1 else 1)
@@ -167,7 +307,7 @@ def alphabeta_min_node(board, color, alpha, beta, limit, caching = 0, ordering =
                 break
 
     if caching:
-        cache[board, color] = (chosen_move, min_util)
+        cache[str(board), color] = (chosen_move, min_util)
     
     return (chosen_move, min_util)
 
@@ -179,8 +319,8 @@ def alphabeta_max_node(board, color, alpha, beta, limit, caching = 0, ordering =
     #alpha at max node: highest value of children
     #beta at max node: lowest value of my sister nodes (our ancestor is a min node so min would just choose that)
 
-    if caching and (board, color) in cache:
-        return cache[board, color]
+    if caching and (str(board), color) in cache:
+        return cache[str(board), color]
 
     if ordering:
         moves = get_sorted_moves(board, color)
@@ -208,7 +348,7 @@ def alphabeta_max_node(board, color, alpha, beta, limit, caching = 0, ordering =
                 break
 
     if caching:
-        cache[board, color] = (chosen_move, max_util)
+        cache[str(board), color] = (chosen_move, max_util)
 
     return (chosen_move, max_util)
 
