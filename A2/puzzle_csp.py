@@ -268,10 +268,11 @@ def init_nary_consts(row_or_col, domain, size):
     Generate nary constraints, that is, for a given row or column, generate
     all possible values of V1, V2... s.t none are equal to each other
     '''
-
+    constraints_add = []
     new_constraint = Constraint(name="nary", scope = row_or_col)
     for pm in itertools.permutations(domain, size):
-        new_constraint.add_satisfying_tuples(tuple(pm))
+        constraints_add.append(pm)
+    new_constraint.add_satisfying_tuples(constraints_add)
 
     return [new_constraint]
 
